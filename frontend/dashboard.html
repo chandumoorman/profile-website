@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+
+<h2>My Profile</h2>
+
+<p><b>Username:</b> <span id="username"></span></p>
+
+<label>Phone:</label><br>
+<input id="phone"><br><br>
+
+<label>Bio:</label><br>
+<textarea id="bio"></textarea><br><br>
+
+<button onclick="updateProfile()">Update Profile</button>
+
+<hr>
+
+<h3>Upload Profile Photo</h3>
+<input type="file" id="photo">
+<button onclick="uploadPhoto()">Upload Photo</button>
+
+<h3>Upload Resume (PDF)</h3>
+<input type="file" id="resume">
+<button onclick="uploadResume()">Upload Resume</button>
+
+<hr>
+
+<button onclick="logout()">Logout</button>
+
+<p id="msg"></p>
+
+<script>
+const token = localStorage.getItem("token");
+
+if (!token) {
+  window.location.href = "login.html";
+}
+
+async function loadProfile() {
+  const res = await fetch("http://127.0.0.1:8000/me", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+
+  const data = await res.json();
+
+  username.innerText = data.username;
+  phone.value = data.phone || "";
+  bio.value = data.bio || "";
+}
+
+async function updateProfile() {
+  const res = await fetch("http://127.0.0.1:8000/me", {
+    method: "PUT",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      phone: phone.value,
+      bio: bio.value
+    })
+  });
+
+  const data = await res.json();
+  msg.innerText = data.status;
+}
+
+async function uploadPhoto() {
+  const formData = new FormData();
+  formData.append("file", photo.files[0]);
+
+  const res = await fetch("http://127.0.0.1:8000/upload/photo", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + token },
+    body: formData
+  });
+
+  const data = await res.json();
+  msg.innerText = data.status;
+}
+
+async function uploadResume() {
+  const formData = new FormData();
+  formData.append("file", resume.files[0]);
+
+  const res = await fetch("http://127.0.0.1:8000/upload/resume", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + token },
+    body: formData
+  });
+
+  const data = await res.json();
+  msg.innerText = data.status;
+}
+
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "login.html";
+}
+
+loadProfile();
+</script>
+
+</body>
+</html>
