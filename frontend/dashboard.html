@@ -42,7 +42,7 @@ if (!token) {
 }
 
 async function loadProfile() {
-  const res = await fetch("http://127.0.0.1:8000/me", {
+  const res = await fetch("https://profile-website-6cqt.onrender.com/me", {
     headers: { "Authorization": "Bearer " + token }
   });
 
@@ -54,7 +54,7 @@ async function loadProfile() {
 }
 
 async function updateProfile() {
-  const res = await fetch("http://127.0.0.1:8000/me", {
+  const res = await fetch("https://profile-website-6cqt.onrender.com/me", {
     method: "PUT",
     headers: {
       "Authorization": "Bearer " + token,
@@ -74,7 +74,7 @@ async function uploadPhoto() {
   const formData = new FormData();
   formData.append("file", photo.files[0]);
 
-  const res = await fetch("http://127.0.0.1:8000/upload/photo", {
+  const res = await fetch("https://profile-website-6cqt.onrender.com/upload/photo", {
     method: "POST",
     headers: { "Authorization": "Bearer " + token },
     body: formData
@@ -88,7 +88,7 @@ async function uploadResume() {
   const formData = new FormData();
   formData.append("file", resume.files[0]);
 
-  const res = await fetch("http://127.0.0.1:8000/upload/resume", {
+  const res = await fetch("https://profile-website-6cqt.onrender.com/upload/resume", {
     method: "POST",
     headers: { "Authorization": "Bearer " + token },
     body: formData
