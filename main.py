@@ -1,11 +1,11 @@
+import os
 import shutil
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
-from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -13,29 +13,29 @@ from database import engine, SessionLocal
 import models
 from auth import hash_password, verify_password, create_token, decode_token
 
-# ------------------ DB setup ------------------
+# --- Setup ---
 models.Base.metadata.create_all(bind=engine)
 
-# ✅ Create app first
 app = FastAPI()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
-# ------------------ Paths (absolute) ------------------
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 UPLOAD_DIR = BASE_DIR / "uploads"
-PHOTO_DIR = UPLOAD_DIR / "photos"
-RESUME_DIR = UPLOAD_DIR / "resumes"
+PHOTOS_DIR = UPLOAD_DIR / "photos"
+RESUMES_DIR = UPLOAD_DIR / "resumes"
 
-# Create directories safely
-PHOTO_DIR.mkdir(parents=True, exist_ok=True)
-RESUME_DIR.mkdir(parents=True, exist_ok=True)
+PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+RESUMES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Serve upload files publicly
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+# Serve static CSS
+app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
-# ------------------ DB dependency ------------------
+# Serve uploaded files
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+
+# --- DB Dependency ---
 def get_db():
     db = SessionLocal()
     try:
@@ -43,7 +43,7 @@ def get_db():
     finally:
         db.close()
 
-# ------------------ Schemas ------------------
+# --- Schemas ---
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -56,7 +56,7 @@ class ProfileUpdate(BaseModel):
     phone: str = ""
     bio: str = ""
 
-# ------------------ Auth dependency ------------------
+# --- Auth Dependency ---
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -68,15 +68,29 @@ def get_current_user(
     user = db.query(models.User).filter_by(username=username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
     return user
 
-# ------------------ API routes ------------------
+# ---------------- FRONTEND ROUTES ----------------
+
 @app.get("/")
 def home():
-    return {"message": "Profile website backend running 🚀"}
+    return FileResponse(FRONTEND_DIR / "login.html")
 
-@app.post("/signup")
+@app.get("/login")
+def login_page():
+    return FileResponse(FRONTEND_DIR / "login.html")
+
+@app.get("/signup")
+def signup_page():
+    return FileResponse(FRONTEND_DIR / "signup.html")
+
+@app.get("/dashboard")
+def dashboard_page():
+    return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+# ---------------- API ROUTES ----------------
+
+@app.post("/api/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(models.User).filter_by(username=user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -89,20 +103,16 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "User created"}
 
-@app.post("/login")
+@app.post("/api/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter_by(username=user.username).first()
-
-    if not db_user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    if not verify_password(user.password, db_user.hashed_password):
+    if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_token(db_user.username)
     return {"access_token": token, "token_type": "bearer"}
 
-@app.get("/me")
+@app.get("/api/me")
 def read_me(current_user: models.User = Depends(get_current_user)):
     return {
         "id": current_user.id,
@@ -113,7 +123,7 @@ def read_me(current_user: models.User = Depends(get_current_user)):
         "resume": current_user.resume
     }
 
-@app.put("/me")
+@app.put("/api/me")
 def update_profile(
     data: ProfileUpdate,
     db: Session = Depends(get_db),
@@ -124,7 +134,7 @@ def update_profile(
     db.commit()
     return {"status": "Profile updated"}
 
-@app.post("/upload/photo")
+@app.post("/api/upload/photo")
 def upload_photo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -134,46 +144,33 @@ def upload_photo(
         raise HTTPException(status_code=400, detail="Only image files allowed")
 
     filename = f"user_{current_user.id}_photo.jpg"
-    filepath = PHOTO_DIR / filename
+    filepath = PHOTOS_DIR / filename
 
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # store relative path
-    current_user.photo = f"uploads/photos/{filename}"
+    # store URL path for browser
+    current_user.photo = f"/uploads/photos/{filename}"
     db.commit()
-    return {"status": "Photo uploaded", "path": current_user.photo}
 
-@app.post("/upload/resume")
+    return {"status": "Photo uploaded"}
+
+@app.post("/api/upload/resume")
 def upload_resume(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Only PDF allowed")
+        raise HTTPException(status_code=400, detail="Only PDF files allowed")
 
     filename = f"user_{current_user.id}_resume.pdf"
-    filepath = RESUME_DIR / filename
+    filepath = RESUMES_DIR / filename
 
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    current_user.resume = f"uploads/resumes/{filename}"
+    current_user.resume = f"/uploads/resumes/{filename}"
     db.commit()
-    return {"status": "Resume uploaded", "path": current_user.resume}
 
-# ------------------ Frontend routes ------------------
-# ✅ These 3 will never 404 if frontend files exist
-
-@app.get("/signup-page")
-def signup_page():
-    return FileResponse(FRONTEND_DIR / "signup.html")
-
-@app.get("/login-page")
-def login_page():
-    return FileResponse(FRONTEND_DIR / "login.html")
-
-@app.get("/dashboard")
-def dashboard_page():
-    return FileResponse(FRONTEND_DIR / "dashboard.html")
+    return {"status": "Resume uploaded"}	

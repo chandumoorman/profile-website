@@ -3,37 +3,44 @@
 <head>
   <title>Signup</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+  <div class="card">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <h1>Create account</h1>
+        <p class="sub">Join and build your profile.</p>
+      </div>
+    </div>
 
-<h2>Signup</h2>
+    <input class="input" id="username" placeholder="Username">
+    <input class="input" id="password" type="password" placeholder="Password">
+    <button class="btn" onclick="signup()">Sign up</button>
 
-<input id="username" placeholder="Username"><br><br>
-<input id="password" type="password" placeholder="Password"><br><br>
+    <div class="msg" id="msg"></div>
 
-<button onclick="signup()">Signup</button>
-
-<p id="msg"></p>
-
-<p>Already have an account?
-  <a href="login.html">Login</a>
-</p>
+    <div class="link">Already have an account? <a href="/login">Login</a></div>
+  </div>
 
 <script>
 async function signup() {
-  const res = await fetch("https://profile-website-6cqt.onrender.com/signup", {
+  msg.innerText = "Creating account...";
+  const res = await fetch("/api/signup", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: username.value,
-      password: password.value
-    })
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ username: username.value, password: password.value })
   });
-
   const data = await res.json();
-  msg.innerText = data.status || data.detail;
+
+  if(res.ok){
+    msg.innerText = "Signup successful ✅ Redirecting to login...";
+    setTimeout(()=> window.location.href="/login", 1000);
+  } else {
+    msg.innerText = data.detail || "Signup failed";
+  }
 }
 </script>
-
 </body>
 </html>

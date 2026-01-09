@@ -3,108 +3,133 @@
 <head>
   <title>Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+  <div class="card">
+    <div class="topbar">
+      <div class="badge">Profile Dashboard</div>
+      <button class="btn" style="width:auto;padding:10px 12px;border-radius:12px" onclick="logout()">Logout</button>
+    </div>
 
-<h2>My Profile</h2>
+    <div style="display:flex; gap:14px; align-items:center; margin-bottom:10px;">
+      <img id="avatar" class="avatar" src="" alt="photo">
+      <div>
+        <h1 style="margin:0;font-size:20px;">@<span id="uname"></span></h1>
+        <p class="sub" style="margin:6px 0 0;">Edit your info & upload files.</p>
+      </div>
+    </div>
 
-<p><b>Username:</b> <span id="username"></span></p>
+    <label class="small">Phone</label>
+    <input class="input" id="phone" placeholder="Phone number">
 
-<label>Phone:</label><br>
-<input id="phone"><br><br>
+    <label class="small">Bio</label>
+    <textarea class="input" id="bio" placeholder="Write something about you..."></textarea>
 
-<label>Bio:</label><br>
-<textarea id="bio"></textarea><br><br>
+    <div class="row">
+      <button class="btn" onclick="updateProfile()">Save Profile</button>
+      <button class="btn" onclick="refreshProfile()">Refresh</button>
+    </div>
 
-<button onclick="updateProfile()">Update Profile</button>
+    <div class="file">
+      <b>Upload Profile Photo</b>
+      <input class="input" type="file" id="photo">
+      <button class="btn" onclick="uploadPhoto()">Upload Photo</button>
+      <div class="small">PNG/JPG recommended</div>
+    </div>
 
-<hr>
+    <div class="file">
+      <b>Upload Resume (PDF)</b>
+      <input class="input" type="file" id="resume">
+      <button class="btn" onclick="uploadResume()">Upload Resume</button>
+      <div class="small">Only PDF is allowed</div>
+    </div>
 
-<h3>Upload Profile Photo</h3>
-<input type="file" id="photo">
-<button onclick="uploadPhoto()">Upload Photo</button>
+    <div class="msg" id="msg"></div>
 
-<h3>Upload Resume (PDF)</h3>
-<input type="file" id="resume">
-<button onclick="uploadResume()">Upload Resume</button>
-
-<hr>
-
-<button onclick="logout()">Logout</button>
-
-<p id="msg"></p>
+    <div class="link">
+      <a id="resumeLink" href="#" target="_blank" style="display:none;">Open uploaded resume</a>
+    </div>
+  </div>
 
 <script>
 const token = localStorage.getItem("token");
+if(!token) window.location.href="/login";
 
-if (!token) {
-  window.location.href = "login.html";
+async function api(path, options={}){
+  options.headers = options.headers || {};
+  options.headers["Authorization"] = "Bearer " + token;
+  return fetch(path, options);
 }
 
-async function loadProfile() {
-  const res = await fetch("https://profile-website-6cqt.onrender.com/me", {
-    headers: { "Authorization": "Bearer " + token }
-  });
-
+async function loadProfile(){
+  const res = await api("/api/me");
   const data = await res.json();
 
-  username.innerText = data.username;
+  uname.innerText = data.username;
   phone.value = data.phone || "";
   bio.value = data.bio || "";
+
+  // photo
+  if(data.photo){
+    avatar.src = data.photo;
+  } else {
+    avatar.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect width='200' height='200' fill='%23111927'/%3E%3Ctext x='50%25' y='52%25' font-size='18' fill='%23a0aec0' text-anchor='middle' dominant-baseline='middle'%3ENo Photo%3C/text%3E%3C/svg%3E";
+  }
+
+  // resume link
+  if(data.resume){
+    resumeLink.style.display = "inline";
+    resumeLink.href = data.resume;
+  } else {
+    resumeLink.style.display = "none";
+  }
 }
 
-async function updateProfile() {
-  const res = await fetch("https://profile-website-6cqt.onrender.com/me", {
-    method: "PUT",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      phone: phone.value,
-      bio: bio.value
-    })
+async function updateProfile(){
+  msg.innerText="Saving...";
+  const res = await api("/api/me",{
+    method:"PUT",
+    headers: {"Content-Type":"application/json","Authorization":"Bearer "+token},
+    body: JSON.stringify({ phone: phone.value, bio: bio.value })
   });
-
   const data = await res.json();
-  msg.innerText = data.status;
+  msg.innerText = data.status || "Saved";
 }
 
-async function uploadPhoto() {
-  const formData = new FormData();
-  formData.append("file", photo.files[0]);
-
-  const res = await fetch("https://profile-website-6cqt.onrender.com/upload/photo", {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + token },
-    body: formData
-  });
-
+async function uploadPhoto(){
+  if(!photo.files[0]) return msg.innerText="Select an image first";
+  msg.innerText="Uploading photo...";
+  const fd = new FormData();
+  fd.append("file", photo.files[0]);
+  const res = await api("/api/upload/photo",{ method:"POST", body: fd });
   const data = await res.json();
-  msg.innerText = data.status;
+  msg.innerText = data.status || "Uploaded";
+  loadProfile();
 }
 
-async function uploadResume() {
-  const formData = new FormData();
-  formData.append("file", resume.files[0]);
-
-  const res = await fetch("https://profile-website-6cqt.onrender.com/upload/resume", {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + token },
-    body: formData
-  });
-
+async function uploadResume(){
+  if(!resume.files[0]) return msg.innerText="Select a PDF first";
+  msg.innerText="Uploading resume...";
+  const fd = new FormData();
+  fd.append("file", resume.files[0]);
+  const res = await api("/api/upload/resume",{ method:"POST", body: fd });
   const data = await res.json();
-  msg.innerText = data.status;
+  msg.innerText = data.status || "Uploaded";
+  loadProfile();
 }
 
-function logout() {
+function logout(){
   localStorage.removeItem("token");
-  window.location.href = "login.html";
+  window.location.href="/login";
+}
+
+function refreshProfile(){
+  msg.innerText="Refreshing...";
+  loadProfile().then(()=> msg.innerText="Updated ✅");
 }
 
 loadProfile();
 </script>
-
 </body>
 </html>

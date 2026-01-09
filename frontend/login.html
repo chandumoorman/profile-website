@@ -3,43 +3,45 @@
 <head>
   <title>Login</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+  <div class="card">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <h1>Welcome back</h1>
+        <p class="sub">Login to your profile dashboard.</p>
+      </div>
+    </div>
 
-<h2>Login</h2>
+    <input class="input" id="username" placeholder="Username">
+    <input class="input" id="password" type="password" placeholder="Password">
+    <button class="btn" onclick="login()">Login</button>
 
-<input id="username" placeholder="Username"><br><br>
-<input id="password" type="password" placeholder="Password"><br><br>
+    <div class="msg" id="msg"></div>
 
-<button onclick="login()">Login</button>
-
-<p id="msg"></p>
-
-<p>No account?
-  <a href="signup.html">Signup</a>
-</p>
+    <div class="link">No account? <a href="/signup">Create one</a></div>
+  </div>
 
 <script>
-async function login() {
-  const res = await fetch("https://profile-website-6cqt.onrender.com/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: username.value,
-      password: password.value
-    })
+async function login(){
+  msg.innerText = "Logging in...";
+  const res = await fetch("/api/login",{
+    method:"POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ username: username.value, password: password.value })
   });
-
   const data = await res.json();
 
-  if (data.access_token) {
+  if(data.access_token){
     localStorage.setItem("token", data.access_token);
-    window.location.href = "dashboard.html";
+    msg.innerText = "Login successful ✅ Redirecting...";
+    setTimeout(()=> window.location.href="/dashboard", 600);
   } else {
-    msg.innerText = data.detail;
+    msg.innerText = data.detail || "Login failed";
   }
 }
 </script>
-
 </body>
 </html>
