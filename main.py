@@ -1,9 +1,8 @@
-import os
 import shutil
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -13,7 +12,7 @@ from database import engine, SessionLocal
 import models
 from auth import hash_password, verify_password, create_token, decode_token
 
-# --- Setup ---
+# ---------- Setup ----------
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -27,15 +26,16 @@ RESUMES_DIR = UPLOAD_DIR / "resumes"
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 RESUMES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Serve static CSS
+# Serve static CSS/JS from frontend/assets
 app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
-# Serve uploaded files
+# Serve uploaded files (photos and resumes)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+# OAuth scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
-# --- DB Dependency ---
+# ---------- DB Dependency ----------
 def get_db():
     db = SessionLocal()
     try:
@@ -43,7 +43,7 @@ def get_db():
     finally:
         db.close()
 
-# --- Schemas ---
+# ---------- Schemas ----------
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -56,7 +56,7 @@ class ProfileUpdate(BaseModel):
     phone: str = ""
     bio: str = ""
 
-# --- Auth Dependency ---
+# ---------- Auth Dependency ----------
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -68,13 +68,17 @@ def get_current_user(
     user = db.query(models.User).filter_by(username=username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
     return user
 
-# ---------------- FRONTEND ROUTES ----------------
+# ==========================================================
+# ✅ FRONTEND ROUTES (OPEN WEBSITE PAGES)
+# ==========================================================
 
+# ✅ MAIN LINK opens login automatically
 @app.get("/")
-def home():
-    return FileResponse(FRONTEND_DIR / "login.html")
+def root():
+    return RedirectResponse(url="/login")
 
 @app.get("/login")
 def login_page():
@@ -88,11 +92,14 @@ def signup_page():
 def dashboard_page():
     return FileResponse(FRONTEND_DIR / "dashboard.html")
 
-# ---------------- API ROUTES ----------------
+# ==========================================================
+# ✅ API ROUTES (BACKEND)
+# ==========================================================
 
 @app.post("/api/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
-    if db.query(models.User).filter_by(username=user.username).first():
+    existing = db.query(models.User).filter_by(username=user.username).first()
+    if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 
     new_user = models.User(
@@ -143,13 +150,18 @@ def upload_photo(
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files allowed")
 
-    filename = f"user_{current_user.id}_photo.jpg"
+    # Use original filename extension safely
+    ext = Path(file.filename).suffix.lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        raise HTTPException(status_code=400, detail="Unsupported image format")
+
+    filename = f"user_{current_user.id}_photo{ext}"
     filepath = PHOTOS_DIR / filename
 
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # store URL path for browser
+    # Store URL path for frontend
     current_user.photo = f"/uploads/photos/{filename}"
     db.commit()
 
@@ -173,4 +185,4 @@ def upload_resume(
     current_user.resume = f"/uploads/resumes/{filename}"
     db.commit()
 
-    return {"status": "Resume uploaded"}	
+    return {"status": "Resume uploaded"}
