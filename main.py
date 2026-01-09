@@ -1,6 +1,7 @@
 import os
 import shutil
-
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -14,7 +15,11 @@ from auth import hash_password, verify_password, create_token, decode_token
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+# Serve frontend pages
+FRONTEND_DIR = "frontend"
 
+# Serve uploaded files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 UPLOAD_PHOTO_DIR = "uploads/photos"
@@ -145,3 +150,15 @@ def upload_resume(
     current_user.resume = filepath
     db.commit()
     return {"status": "Resume uploaded"}
+
+@app.get("/signup-page")
+def signup_page():
+    return FileResponse("frontend/signup.html")
+
+@app.get("/login-page")
+def login_page():
+    return FileResponse("frontend/login.html")
+
+@app.get("/dashboard-page")
+def dashboard_page():
+    return FileResponse("frontend/dashboard.html")
