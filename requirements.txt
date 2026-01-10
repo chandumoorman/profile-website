@@ -4,4 +4,3 @@ sqlalchemy
 passlib
 python-jose
 python-multipart
-jinja2

@@ -6,39 +6,43 @@
   <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
-  <div class="card">
-    <div class="brand">
-      <div class="logo"></div>
-      <div>
-        <h1>Create account</h1>
-        <p class="sub">Join and build your profile.</p>
-      </div>
-    </div>
 
-    <input class="input" id="username" placeholder="Username">
-    <input class="input" id="password" type="password" placeholder="Password">
-    <button class="btn" onclick="signup()">Sign up</button>
+<div class="card">
+  <h2>Signup</h2>
 
-    <div class="msg" id="msg"></div>
+  <input id="username" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
 
-    <div class="link">Already have an account? <a href="/login">Login</a></div>
-  </div>
+  <button onclick="signup()">Create Account</button>
+
+  <div id="msg"></div>
+
+  <div class="link">Already have account? <a href="/login">Login</a></div>
+</div>
 
 <script>
-async function signup() {
+async function signup(){
   msg.innerText = "Creating account...";
-  const res = await fetch("/api/signup", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ username: username.value, password: password.value })
-  });
-  const data = await res.json();
+  try{
+    const res = await fetch("/api/signup",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        username: username.value,
+        password: password.value
+      })
+    });
 
-  if(res.ok){
-    msg.innerText = "Signup successful ✅ Redirecting to login...";
-    setTimeout(()=> window.location.href="/login", 1000);
-  } else {
-    msg.innerText = data.detail || "Signup failed";
+    const data = await res.json();
+
+    if(res.ok){
+      msg.innerText="Signup done ✅ Redirecting...";
+      setTimeout(()=>window.location.href="/login", 800);
+    } else {
+      msg.innerText = data.detail || "Signup failed";
+    }
+  } catch(e){
+    msg.innerText = "Network error. Try again.";
   }
 }
 </script>

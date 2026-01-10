@@ -1,38 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<div class="card">
+  <h2>Login</h2>
+
+  <input id="username" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
+
+  <button onclick="login()">Login</button>
+
+  <div id="msg"></div>
+
+  <div class="link">No account? <a href="/signup">Signup</a></div>
+</div>
+
 <script>
-/* JWT expiry handling */
-const token = localStorage.getItem("token");
-if(token){
-  try{
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    if(payload.exp * 1000 < Date.now()){
-      localStorage.removeItem("token");
-    } else {
-      window.location.href="/dashboard";
-    }
-  }catch(e){
-    localStorage.removeItem("token");
-  }
-}
-
 async function login(){
-  localStorage.removeItem("token");
+  msg.innerText = "Logging in...";
+  try{
+    const res = await fetch("/api/login",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        username: username.value,
+        password: password.value
+      })
+    });
 
-  const res = await fetch("/api/login",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      username: username.value,
-      password: password.value
-    })
-  });
+    const data = await res.json();
 
-  const data = await res.json();
-
-  if(data.access_token){
-    localStorage.setItem("token", data.access_token);
-    window.location.href="/dashboard";
-  } else {
-    msg.innerText = data.detail || "Login failed";
+    if(data.access_token){
+      localStorage.setItem("token", data.access_token);
+      window.location.href="/dashboard";
+    } else {
+      msg.innerText = data.detail || "Login failed";
+    }
+  } catch(e){
+    msg.innerText = "Network error. Please try again.";
   }
 }
 </script>
+</body>
+</html>

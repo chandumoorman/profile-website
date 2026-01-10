@@ -1,3 +1,4 @@
+import os
 import shutil
 from pathlib import Path
 
@@ -12,7 +13,6 @@ from database import engine, SessionLocal
 import models
 from auth import hash_password, verify_password, create_token, decode_token
 
-# ---------- Setup ----------
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -26,16 +26,12 @@ RESUMES_DIR = UPLOAD_DIR / "resumes"
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 RESUMES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Serve static CSS/JS from frontend/assets
+# Static files
 app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
-
-# Serve uploaded files (photos and resumes)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# OAuth scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
-# ---------- DB Dependency ----------
 def get_db():
     db = SessionLocal()
     try:
@@ -43,7 +39,7 @@ def get_db():
     finally:
         db.close()
 
-# ---------- Schemas ----------
+# ----------------- Schemas -----------------
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -56,7 +52,7 @@ class ProfileUpdate(BaseModel):
     phone: str = ""
     bio: str = ""
 
-# ---------- Auth Dependency ----------
+# ----------------- Auth -----------------
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -68,14 +64,10 @@ def get_current_user(
     user = db.query(models.User).filter_by(username=username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
     return user
 
-# ==========================================================
-# ✅ FRONTEND ROUTES (OPEN WEBSITE PAGES)
-# ==========================================================
+# ================= FRONTEND ROUTES =================
 
-# ✅ MAIN LINK opens login automatically
 @app.get("/")
 def root():
     return RedirectResponse(url="/login")
@@ -92,14 +84,11 @@ def signup_page():
 def dashboard_page():
     return FileResponse(FRONTEND_DIR / "dashboard.html")
 
-# ==========================================================
-# ✅ API ROUTES (BACKEND)
-# ==========================================================
+# ================= API ROUTES =================
 
 @app.post("/api/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter_by(username=user.username).first()
-    if existing:
+    if db.query(models.User).filter_by(username=user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
 
     new_user = models.User(
@@ -113,16 +102,18 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 @app.post("/api/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter_by(username=user.username).first()
-    if not db_user or not verify_password(user.password, db_user.hashed_password):
+    if not db_user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_token(db_user.username)
     return {"access_token": token, "token_type": "bearer"}
 
 @app.get("/api/me")
-def read_me(current_user: models.User = Depends(get_current_user)):
+def me(current_user: models.User = Depends(get_current_user)):
     return {
-        "id": current_user.id,
         "username": current_user.username,
         "phone": current_user.phone,
         "bio": current_user.bio,
@@ -131,7 +122,7 @@ def read_me(current_user: models.User = Depends(get_current_user)):
     }
 
 @app.put("/api/me")
-def update_profile(
+def update_me(
     data: ProfileUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -140,49 +131,3 @@ def update_profile(
     current_user.bio = data.bio
     db.commit()
     return {"status": "Profile updated"}
-
-@app.post("/api/upload/photo")
-def upload_photo(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files allowed")
-
-    # Use original filename extension safely
-    ext = Path(file.filename).suffix.lower()
-    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
-        raise HTTPException(status_code=400, detail="Unsupported image format")
-
-    filename = f"user_{current_user.id}_photo{ext}"
-    filepath = PHOTOS_DIR / filename
-
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # Store URL path for frontend
-    current_user.photo = f"/uploads/photos/{filename}"
-    db.commit()
-
-    return {"status": "Photo uploaded"}
-
-@app.post("/api/upload/resume")
-def upload_resume(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Only PDF files allowed")
-
-    filename = f"user_{current_user.id}_resume.pdf"
-    filepath = RESUMES_DIR / filename
-
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    current_user.resume = f"/uploads/resumes/{filename}"
-    db.commit()
-
-    return {"status": "Resume uploaded"}
